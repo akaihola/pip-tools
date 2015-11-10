@@ -252,6 +252,7 @@ class PackageManager(BasePackageManager):
         os.environ.get('PIPTOOLS_ROOT', '~/.pip-tools'))
     dep_cache_file = os.path.join(piptools_root, 'dependencies.pickle')
     download_cache_root = os.path.join(piptools_root, 'cache')
+    vcs_download_cache_root = os.environ.get('PIPTOOLS_VCS_DOWNLOAD_CACHE', download_cache_root)
 
     def __init__(self, index_url=None, extra_index_urls=[], find_links=[],
                  allow_all_prereleases=False, trusted_hosts=None):
@@ -260,6 +261,8 @@ class PackageManager(BasePackageManager):
             index_url = 'https://pypi.python.org/simple/'
         if not os.path.exists(self.download_cache_root):
             os.makedirs(self.download_cache_root)
+        if not os.path.exists(self.vcs_download_cache_root):
+            os.makedirs(self.vcs_download_cache_root)
         self._link_cache = {}
         self._dep_cache = PersistentCache(self.dep_cache_file)
         self._dep_call_cache = {}
@@ -403,13 +406,16 @@ class PackageManager(BasePackageManager):
         return [Spec.from_line(dep) for dep in deps]
 
     # Helper methods
-    def get_local_package_path(self, url):  # noqa
+    def get_local_package_path(self, url, vcs_url):  # noqa
         """Returns the full local path name for a given URL.  This
         does not require the package archive to exist locally.  In fact, this
         can be used to calculate the destination path for a download.
         """
         cache_key = quote(url, '')
-        fullpath = os.path.join(self.download_cache_root, cache_key)
+        if vcs_url:
+            fullpath = os.path.join(self.vcs_download_cache_root, cache_key)
+        else:
+            fullpath = os.path.join(self.download_cache_root, cache_key)
         return fullpath
 
     def get_or_download_package(self, spec):
@@ -419,9 +425,11 @@ class PackageManager(BasePackageManager):
         logger.debug('- Getting package location for {}'.format(spec))
         with logger.indent():
             link = self._link_cache[spec]
-            fullpath = self.get_local_package_path(url_without_fragment(link))
+            link_is_vcs_url = spec.vcs_url or is_vcs_url(link)
+            fullpath = self.get_local_package_path(url_without_fragment(link),
+                                                   link_is_vcs_url)
 
-            if spec.vcs_url or is_vcs_url(link):
+            if link_is_vcs_url:
                 # We don't use a persistent cache for VCS urls: the branch
                 # could have been updated since the previous pip-compile call.
                 if link not in self._unpacked_vcs_urls:
