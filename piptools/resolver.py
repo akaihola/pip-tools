@@ -30,13 +30,10 @@ class Resolver(object):
         self.spec_set.add_specs(new_deps)
         return len(new_deps) > 0
 
-    def resolve(self, max_rounds=20):
+    def resolve(self, max_rounds=12):
         """Resolves the spec set one round at a time, until the set does not
         change significantly anymore.  Protects against infinite loops by
         breaking out after a max number rounds.
-
-        For resolving Sphinx requirements, 12 rounds was not enough.
-
         """
         round = 0
         while True:
